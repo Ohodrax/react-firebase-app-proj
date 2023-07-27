@@ -1,0 +1,296 @@
+import { useState, useEffect } from 'react';
+import { db, auth } from './firebaseConnection';
+
+import { doc, setDoc, collection, addDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+
+import './app.css';
+
+function App() {
+
+  const [titulo, setTitulo] = useState('');
+  const [autor, setAutor] = useState('');
+
+  const [idPost, setIdPost] = useState('');
+
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+
+  const [user, setUser] = useState(false);
+  const [userDetail, setUserDetail] = useState('');
+
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    async function loadPosts(){
+      const unsub = onSnapshot(collection(db, "posts"), (snapshot) => {
+        let listaPost = [];
+
+        snapshot.forEach((doc) => {
+          listaPost.push({
+            id: doc.id,
+            titulo: doc.data().titulo,
+            autor: doc.data().autor
+          })
+        })
+
+        setPosts(listaPost);
+      });
+    }
+
+    loadPosts();
+  }, []);
+
+  useEffect(() => {
+    async function checkLogin(){
+      onAuthStateChanged(auth, (user) => {
+        if(user){
+          console.log(user);
+          setUser(true);
+          setUserDetail({
+            uid: user.id,
+            email: user.email
+          })
+        } else {
+          setUser(false);
+          setUserDetail({});
+        }
+      })
+    }
+
+    checkLogin();
+  }, [])
+
+  async function handleAdd(){
+    // await setDoc(doc(db, "posts", "12345"), {
+    //   titulo: titulo,
+    //   autor: autor
+    // })
+    // .then(() => {
+    //   alert("Dados registrados com sucesso.");
+    // })
+    // .catch((error) => {
+    //   alert("Erro ao cadastrar.: " + error);
+    // })
+
+    await addDoc(collection(db, "posts"), {
+      titulo: titulo,
+      autor: autor
+    })
+    .then(() => {
+      console.log("Cadastrado com sucesso!")
+      setAutor('');
+      setTitulo('');
+    })
+    .catch((error) => {
+      alert("Erro.: " + error)
+    })
+  }
+
+  async function buscarPost() {
+    // const postRef = doc(db, "posts", "mIpeBWDbeVoGExCvAXx3");
+
+    // await getDoc(postRef)
+    // .then((snapshot) => {
+    //   setAutor(snapshot.data().autor)
+    //   setTitulo(snapshot.data().titulo)
+    // })
+    // .catch((error) => {
+    //   alert("Error.: " + error)
+    // })
+
+    const postsRef = collection(db, "posts");
+
+    await getDocs(postsRef)
+    .then((snapshot) => {
+      let lista = [];
+
+      snapshot.forEach((doc) => {
+        lista.push({
+          id: doc.id,
+          titulo: doc.data().titulo,
+          autor: doc.data().autor
+        })
+      })
+
+      setPosts(lista);
+    })
+    .catch((error) => {
+      console.log("Error.: " + error);
+    })
+  }
+
+  async function editarPost(){
+    const docRef = doc(db, "posts", idPost);
+
+    await updateDoc(docRef, {
+      titulo: titulo,
+      autor: autor
+    })
+    .then(() => {
+      console.log("Atualizado!")
+      setAutor('');
+      setTitulo('');
+      setIdPost('');
+    })
+    .catch((error) => {
+      console.log("Error.: " + error)
+    })
+  }
+
+  async function excluirPost(id) {
+    const docRef = doc(db, "posts", id);
+
+    await deleteDoc(docRef)
+    .then(() => {
+      alert("Post deletado com sucesso!");
+    })
+    .catch((error) => {
+      console.log("Error.: " + error);
+    })
+  }
+
+  async function novoUsuario(){
+    await createUserWithEmailAndPassword(auth, email, senha)
+    .then(() => {
+      console.log("CADASTRADO COM SUCESSO!");
+
+      setEmail('');
+      setSenha('');
+    })
+    .catch((error) => {
+      console.log("Error.: " + error);
+      switch (error.code) {
+        case 'auth/invalid-email':
+          alert("Por favor insira um e-mail válido.");
+        break;
+
+        case 'auth/weak-password':
+          alert("Por favor insira uma senha que preste...");
+        break;
+
+        case 'auth/missing-password':
+          alert("Por favor insira uma senha");
+        break;
+
+        case 'auth/email-already-in-use':
+          alert("Lamento, este e-mail já esta em uso...");
+        break;
+
+        default:
+          console.log("Unexpected error.: " + error.code)
+        break;
+      }
+    })
+  }
+
+  async function logarUsuario(){
+    await signInWithEmailAndPassword(auth, email, senha)
+    .then((value) => {
+      console.log("User logado!")
+
+      setUserDetail({
+        uid: value.user.uid,
+        email: value.user.email
+      });
+
+      setUser(true);
+
+      setEmail('');
+      setSenha('');
+
+      console.log(value)
+      console.log(value.user)
+    })
+    .catch((error) => {
+      if(error.code === 'auth/wrong-password'){
+        alert("Ops... senha incorreta.");
+        setSenha('');
+      } else if(error.code === 'auth/user-not-found'){
+        alert("Usuário não encontrado.");
+      }
+      console.log("Error.: " + error);
+    })
+  }
+
+  async function fazerLogout() {
+    await signOut(auth)
+    .then(() => {
+      setUser(false);
+      setUserDetail({});
+
+      alert("Desconectado com sucesso!");
+    })
+    .catch((error) => {
+      console.log("Error.: " + error);
+    })
+  }
+
+  return (
+    <div>
+      <h1>ReactJS + Firebase :)</h1>
+
+      { user && (
+        <div>
+          <strong>Seja bem-vindo(a) (Você está logado!)</strong> <br/>
+          <span>ID: {userDetail.uid} - E-mail: {userDetail.email}</span>
+          <br/>
+          <button onClick={fazerLogout}>Sair da conta</button>
+          <br/>
+          <br/>
+        </div>
+      ) }
+
+      <div className='container'>
+        <h2>Usuários:</h2>
+
+        <label>E-mail:</label>
+        <input type="email" placeholder='E-mail' value={email} onChange={(e) => setEmail(e.target.value)}/>
+
+        <label>Senha:</label>
+        <input type='password' placeholder='Senha' value={senha} onChange={(e) => setSenha(e.target.value)}/>
+        <br/>
+        <button onClick={novoUsuario}>Cadastrar</button>
+        <br/>
+        <br/>
+        <button onClick={logarUsuario}>Login</button>
+        <br/>
+      </div>
+
+      <hr/>
+
+      <div className='container'>
+        <h2>Posts:</h2>
+
+        <label>ID do Post:</label>
+        <input placeholder='Digite o ID do Post' value={idPost} onChange={(e) => {setIdPost(e.target.value)}}/>
+        <br/>
+        <label>Titulo:</label>
+        <textarea placeholder='Digite o titulo' type='text' value={titulo} onChange={(e) => {setTitulo(e.target.value)}}/>
+
+        <label>Autor:</label>
+        <input type="text" placeholder='Autor do Post' value={autor} onChange={(e) => {setAutor(e.target.value)}}/>
+
+        <button onClick={() => handleAdd()}>Cadastrar</button>
+        <button onClick={() => buscarPost()}>Buscar Post</button>
+        <br/>
+        <button onClick={() => editarPost()}>Atualizar Post</button>
+
+        <ul>
+          {posts.map((post) => {
+            return(
+              <li key={post.id}>
+                <span>ID: {post.id}</span><br/>
+                <span>Titulo: {post.titulo}</span><br/>
+                <span>Autor: {post.autor}</span><br/>
+                <button onClick={() => excluirPost(post.id)}>Excluir</button><br/><br/>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+export default App;
